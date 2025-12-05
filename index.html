@@ -291,7 +291,7 @@
       }
     });
 
-    const MAX_POINTS = 20;
+    const MAX_POINTS = 30;
     const perAlat = { alat1_log_cuaca:[], alat2_log_cuaca:[], alat3_log_cuaca:[] };
 
     function updateCards(){
@@ -391,7 +391,7 @@
 
     // Firebase real-time listener
     ALATS.forEach(path=>{
-      const q = query(ref(db, path), limitToLast(20));
+      const q = query(ref(db, path), limitToLast(30));
       onValue(q, snapshot=>{
         const val = snapshot.val();
         perAlat[path] = snapshotToArray(val).slice(-MAX_POINTS);
