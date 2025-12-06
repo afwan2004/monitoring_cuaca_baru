@@ -196,21 +196,24 @@
   const ALATS = ["alat1_log_cuaca","alat2_log_cuaca","alat3_log_cuaca"];
   const perAlat = { alat1_log_cuaca:[], alat2_log_cuaca:[], alat3_log_cuaca:[] };
 
-  function makeLabel(it){ return `${it.tanggal} ${it.waktu}`; }
-
+  function makeLabel(v){ return `${v.tanggal} ${v.waktu}`; }
   function hujanText(v){ return v=="0" ? "HUJAN" : "TERANG"; }
 
+  // ==========================
+  // CARD TERBARU
+  // ==========================
   function updateCards(){
     [1,2,3].forEach(i=>{
       const arr = perAlat[`alat${i}_log_cuaca`];
       const last = arr[arr.length-1];
+
       const T = document.getElementById(`c${i}-temp`);
       const I = document.getElementById(`c${i}-info`);
       const H = document.getElementById(`c${i}-hujan`);
 
       if(!last){
         T.textContent="-- °C";
-        I.textContent="Menunggu...";
+        I.textContent="Menunggu data...";
         H.textContent="Hujan: --";
       } else {
         T.textContent = last.suhu+" °C";
@@ -220,7 +223,9 @@
     });
   }
 
-  // ===== GRAFIK =====
+  // ==========================
+  // GRAFIK
+  // ==========================
   function createChart(id){
     return new Chart(document.getElementById(id), {
       type: "line",
@@ -238,27 +243,30 @@
   const chartTekanan = createChart("chartTekanan");
   const chartHujan = createChart("chartHujan");
 
+  // ==========================
+  // UPDATE GRAFIK 30 DATA TERBARU
+  // ==========================
   function updateCharts(){
-    const labels = new Set();
-    ALATS.forEach(a=>perAlat[a].forEach(v=>labels.add(makeLabel(v))));
-    const L = [...labels];
+    // Ambil daftar waktu dari alat 1 (acuan)
+    const alatAcuan = perAlat["alat1_log_cuaca"];
+    if(alatAcuan.length === 0) return;
 
-    chartSuhu.data.labels = L;
-    chartKelembapan.data.labels = L;
-    chartTekanan.data.labels = L;
-    chartHujan.data.labels = L;
+    const labels = alatAcuan.map(v => makeLabel(v));
 
-    ALATS.forEach((a,idx)=>{
-      const arr = perAlat[a];
-      const suhuArr = L.map(l=>arr.find(v=>makeLabel(v)==l)?.suhu || null);
-      const kelArr  = L.map(l=>arr.find(v=>makeLabel(v)==l)?.kelembapan || null);
-      const tekArr  = L.map(l=>arr.find(v=>makeLabel(v)==l)?.tekanan || null);
-      const hujArr  = L.map(l=>arr.find(v=>makeLabel(v)==l)?.hujan || null);
+    // Set label grafik
+    chartSuhu.data.labels = labels;
+    chartKelembapan.data.labels = labels;
+    chartTekanan.data.labels = labels;
+    chartHujan.data.labels = labels;
 
-      chartSuhu.data.datasets[idx].data = suhuArr;
-      chartKelembapan.data.datasets[idx].data = kelArr;
-      chartTekanan.data.datasets[idx].data = tekArr;
-      chartHujan.data.datasets[idx].data = hujArr;
+    // Isi dataset setiap alat
+    ALATS.forEach((alat, idx)=>{
+      const arr = perAlat[alat];
+
+      chartSuhu.data.datasets[idx].data      = arr.map(v=>v.suhu);
+      chartKelembapan.data.datasets[idx].data = arr.map(v=>v.kelembapan);
+      chartTekanan.data.datasets[idx].data    = arr.map(v=>v.tekanan);
+      chartHujan.data.datasets[idx].data      = arr.map(v=>v.hujan);
     });
 
     chartSuhu.update();
@@ -267,13 +275,15 @@
     chartHujan.update();
   }
 
-  // ===== TABEL =====
+  // ==========================
+  // TABEL 10 DATA
+  // ==========================
   function renderTable(){
     const alat = document.getElementById("selectAlat").value;
     const list = perAlat[alat].slice(-10).reverse();
     const tbody = document.querySelector("#logTable tbody");
-    tbody.innerHTML="";
 
+    tbody.innerHTML = "";
     list.forEach(v=>{
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -290,26 +300,44 @@
 
   document.getElementById("selectAlat").addEventListener("change", renderTable);
 
-  // LISTEN REALTIME
+  // ==========================
+  // BACA DATA FIREBASE (30 TERBARU)
+  // ==========================
   ALATS.forEach(path=>{
-    const q = query(ref(db,path), limitToLast(30));
+    const q = query(ref(db, path), limitToLast(30));
     onValue(q, snap=>{
       const data = snap.val() || {};
-      perAlat[path] = Object.keys(data).map(k=>data[k]);
+
+      // ubah ke array
+      const arr = Object.keys(data).map(k => data[k]);
+
+      // urutkan berdasarkan tanggal + waktu
+      arr.sort((a, b) => {
+        const t1 = new Date(a.tanggal + " " + a.waktu);
+        const t2 = new Date(b.tanggal + " " + b.waktu);
+        return t1 - t2;
+      });
+
+      perAlat[path] = arr;
+
       updateCards();
       updateCharts();
       renderTable();
     });
   });
 
+  // ==========================
   // DOWNLOAD CSV
+  // ==========================
   document.getElementById("downloadBtn").onclick = ()=>{
     let csv = "alat,waktu,suhu,kelembapan,tekanan,hujan,kondisi\n";
+
     ALATS.forEach(a=>{
       perAlat[a].forEach(v=>{
         csv += `${a},${makeLabel(v)},${v.suhu},${v.kelembapan},${v.tekanan},${v.hujan},${v.kondisi||""}\n`;
       });
     });
+
     const blob = new Blob([csv],{type:"text/csv"});
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -322,7 +350,9 @@
     updateCharts();
     renderTable();
   };
+
 </script>
+
 
 </body>
 </html>
